@@ -1,9 +1,32 @@
-use anyhow::Result;
 use std::fmt;
+use std::mem::size_of;
+use thiserror::Error;
 use tracing::{debug, info};
 use windows::Win32::Devices::Display::{DisplayConfigGetDeviceInfo, DisplayConfigSetDeviceInfo, GetDisplayConfigBufferSizes, QueryDisplayConfig, SetDisplayConfig, DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME, DISPLAYCONFIG_DEVICE_INFO_HEADER, DISPLAYCONFIG_DEVICE_INFO_TYPE, DISPLAYCONFIG_MODE_INFO, DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE, DISPLAYCONFIG_PATH_INFO, DISPLAYCONFIG_TARGET_DEVICE_NAME, DISPLAYCONFIG_TARGET_DEVICE_NAME_FLAGS, DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY, QDC_ONLY_ACTIVE_PATHS, SDC_APPLY, SDC_USE_SUPPLIED_DISPLAY_CONFIG};
 
 pub const DPI_VALUES: [i32; 12] = [100, 125, 150, 175, 200, 225, 250, 300, 350, 400, 450, 500];
+
+#[derive(Debug, Error)]
+pub enum DisplayError {
+    #[error("Failed to query display config: {0}")]
+    QueryDisplayConfig(u32),
+
+    #[error("Failed to get monitor friendly name: {0}")]
+    GetMonitorFriendlyName(i32),
+    #[error("Failed to get DPI info: {0}")]
+    GetDpiInfo(i32),
+    #[error("DPI index out of range")]
+    DpiIndexOutOfRange,
+
+    #[error("Failed to set display configuration: {0}")]
+    SetDisplayConfig(i32),
+    #[error("Failed to set DPI scaling: {0}")]
+    SetDpiScaling(i32),
+    #[error("Integer conversion error: {0}")]
+    IntConversionError(#[from] std::num::TryFromIntError),
+}
+
+pub type Result<T> = std::result::Result<T, DisplayError>;
 
 #[derive(Debug, Clone)]
 pub struct DisplayInfo {
@@ -134,7 +157,7 @@ fn get_display_config() -> Result<(Vec<DISPLAYCONFIG_PATH_INFO>, Vec<DISPLAYCONF
             &raw mut mode_count,
         );
         if result.0 != 0 {
-            anyhow::bail!("Failed to get display config buffer sizes: {}", result.0);
+            return Err(DisplayError::QueryDisplayConfig(result.0));
         }
 
         let mut paths = vec![DISPLAYCONFIG_PATH_INFO::default(); path_count as usize];
@@ -149,7 +172,7 @@ fn get_display_config() -> Result<(Vec<DISPLAYCONFIG_PATH_INFO>, Vec<DISPLAYCONF
             None,
         );
         if result.0 != 0 {
-            anyhow::bail!("Failed to query display config: {}", result.0);
+            return Err(DisplayError::QueryDisplayConfig(result.0));
         }
 
         debug!("Retrieved {} paths and {} modes", path_count, mode_count);
@@ -186,7 +209,7 @@ fn get_display_name_from_path(path: &DISPLAYCONFIG_PATH_INFO) -> Result<String> 
             .to_string();
         Ok(friendly_name)
     } else {
-        anyhow::bail!("Failed to get monitor friendly name: {result}");
+        Err(DisplayError::GetMonitorFriendlyName(result))
     }
 }
 
@@ -206,7 +229,7 @@ fn get_display_scaling_from_path(path: &DISPLAYCONFIG_PATH_INFO) -> Result<(i32,
     unsafe {
         let result = DisplayConfigGetDeviceInfo(&raw mut dpi_info.header);
         if result != 0 {
-            anyhow::bail!("Failed to get DPI info: {result}");
+            return Err(DisplayError::GetDpiInfo(result));
         }
     }
 
@@ -218,7 +241,7 @@ fn get_display_scaling_from_path(path: &DISPLAYCONFIG_PATH_INFO) -> Result<(i32,
     if cur_index < DPI_VALUES.len() {
         Ok((DPI_VALUES[cur_index], DPI_VALUES[rec_index]))
     } else {
-        anyhow::bail!("DPI index out of range");
+        Err(DisplayError::DpiIndexOutOfRange)
     }
 }
 
@@ -256,7 +279,7 @@ fn apply_display_resolution(
         );
 
         if result != 0 {
-            anyhow::bail!("Failed to set display configuration: {result}");
+            return Err(DisplayError::SetDisplayConfig(result));
         }
 
         info!("Resolution changed successfully");
@@ -302,7 +325,7 @@ fn apply_display_scaling(display: &DisplayInfo, config: &DisplayConfig) -> Resul
 
         let result = DisplayConfigSetDeviceInfo(&raw mut dpi_set.header);
         if result != 0 {
-            anyhow::bail!("Failed to set DPI scaling: {result}");
+            return Err(DisplayError::SetDpiScaling(result));
         }
 
         info!("DPI scaling changed successfully");

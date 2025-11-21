@@ -13,6 +13,7 @@ repository = "https://github.com/Kuhnix46/display-tuner"
 [dependencies]
 windows = { version = "0.62", features = ["Win32_Devices_Display"] }
 anyhow = "1.0"
+thiserror = "2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4.5", features = ["derive"] }
