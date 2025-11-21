@@ -11,4 +11,6 @@ fn test_display_info() {
     assert!(first.height > 0);
     assert!(first.scaling_current > 0);
     assert!(first.scaling_recommended > 0);
+    
+    println!("{first}");
 }

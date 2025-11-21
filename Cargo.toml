@@ -2,10 +2,10 @@
 name = "display-tuner"
 version = "0.1.0"
 edition = "2024"
-authors = ["Koen Cardoen"]
-categories = ["games"]
-description = "TBD"
-keywords = ["TBD"]
+authors = ["Kuhnix46"]
+categories = ["command-line-utilities"]
+description = "A command line utility to get and set display settings on Windows."
+keywords = ["display", "monitor", "settings", "windows", "cli"]
 license = "GPL-3"
 readme = "README.md"
 repository = "https://github.com/Kuhnix46/display-tuner"
