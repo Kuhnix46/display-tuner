@@ -1,14 +1,7 @@
-use std::mem;
-
 use anyhow::Result;
+use std::fmt;
 use tracing::{debug, info};
-use windows::Win32::Devices::Display::{
-    DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME, DISPLAYCONFIG_DEVICE_INFO_HEADER,
-    DISPLAYCONFIG_DEVICE_INFO_TYPE, DISPLAYCONFIG_MODE_INFO, DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE,
-    DISPLAYCONFIG_PATH_INFO, DISPLAYCONFIG_TARGET_DEVICE_NAME, DisplayConfigGetDeviceInfo,
-    DisplayConfigSetDeviceInfo, GetDisplayConfigBufferSizes, QDC_ONLY_ACTIVE_PATHS,
-    QueryDisplayConfig, SDC_APPLY, SDC_USE_SUPPLIED_DISPLAY_CONFIG, SetDisplayConfig,
-};
+use windows::Win32::Devices::Display::{DisplayConfigGetDeviceInfo, DisplayConfigSetDeviceInfo, GetDisplayConfigBufferSizes, QueryDisplayConfig, SetDisplayConfig, DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME, DISPLAYCONFIG_DEVICE_INFO_HEADER, DISPLAYCONFIG_DEVICE_INFO_TYPE, DISPLAYCONFIG_MODE_INFO, DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE, DISPLAYCONFIG_PATH_INFO, DISPLAYCONFIG_TARGET_DEVICE_NAME, DISPLAYCONFIG_TARGET_DEVICE_NAME_FLAGS, DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY, QDC_ONLY_ACTIVE_PATHS, SDC_APPLY, SDC_USE_SUPPLIED_DISPLAY_CONFIG};
 
 pub const DPI_VALUES: [i32; 12] = [100, 125, 150, 175, 200, 225, 250, 300, 350, 400, 450, 500];
 
@@ -19,12 +12,27 @@ pub struct DisplayTuner {
 
 #[derive(Debug, Clone)]
 pub struct DisplayInfo {
-    friendly_name: String,
-    source_id: u32,
-    width: u32,
-    height: u32,
-    scaling_current: i32,
-    scaling_recommended: i32,
+    pub friendly_name: String,
+    pub source_id: u32,
+    pub width: u32,
+    pub height: u32,
+    pub scaling_current: i32,
+    pub scaling_recommended: i32,
+}
+
+impl fmt::Display for DisplayInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Example: [id:12345] My Monitor — 2560x1440 @ 125% (rec 150%)
+        write!(
+            f,
+            "[id:{}] {} — {}x{} @ {}%",
+            self.source_id, self.friendly_name, self.width, self.height, self.scaling_current
+        )?;
+        if self.scaling_recommended != self.scaling_current {
+            write!(f, " (rec {}%)", self.scaling_recommended)?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -52,7 +60,7 @@ impl DisplayTuner {
     pub fn enumerate_displays(&mut self) -> Result<Vec<DisplayInfo>> {
         let mut displays = Vec::new();
 
-        let (paths, modes) = self.get_display_config()?;
+        let (paths, modes) = Self::get_display_config()?;
 
         for path in &paths {
             debug!("Processing path...");
@@ -90,7 +98,7 @@ impl DisplayTuner {
                 scaling_current: scaling.0,
                 scaling_recommended: scaling.1,
             };
-            info!("{:?}", disp);
+            info!("{disp}");
             displays.push(disp);
         }
 
@@ -123,9 +131,8 @@ impl DisplayTuner {
         Ok(())
     }
 
-    fn get_display_config(
-        &self,
-    ) -> Result<(Vec<DISPLAYCONFIG_PATH_INFO>, Vec<DISPLAYCONFIG_MODE_INFO>)> {
+    fn get_display_config() -> Result<(Vec<DISPLAYCONFIG_PATH_INFO>, Vec<DISPLAYCONFIG_MODE_INFO>)>
+    {
         unsafe {
             let mut path_count = 0u32;
             let mut mode_count = 0u32;
@@ -164,12 +171,12 @@ impl DisplayTuner {
         let mut target_name = DISPLAYCONFIG_TARGET_DEVICE_NAME {
             header: DISPLAYCONFIG_DEVICE_INFO_HEADER {
                 r#type: DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME,
-                size: mem::size_of::<DISPLAYCONFIG_TARGET_DEVICE_NAME>() as u32,
+                size: size_of::<DISPLAYCONFIG_TARGET_DEVICE_NAME>() as u32,
                 adapterId: path.targetInfo.adapterId,
                 id: path.targetInfo.id,
             },
-            flags: Default::default(),
-            outputTechnology: Default::default(),
+            flags: DISPLAYCONFIG_TARGET_DEVICE_NAME_FLAGS::default(),
+            outputTechnology: DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY::default(),
             edidManufactureId: 0,
             edidProductCodeId: 0,
             connectorInstance: 0,
@@ -186,10 +193,9 @@ impl DisplayTuner {
             let friendly_name = String::from_utf16_lossy(&target_name.monitorFriendlyDeviceName)
                 .trim_end_matches('\0')
                 .to_string();
-
-            Ok(format!("{} ({})", path.sourceInfo.id, friendly_name))
+            Ok(friendly_name)
         } else {
-            anyhow::bail!("Failed to get monitor friendly name: {}", result);
+            anyhow::bail!("Failed to get monitor friendly name: {result}");
         }
     }
 
@@ -197,7 +203,7 @@ impl DisplayTuner {
         let mut dpi_info = DpiScaleGet {
             header: DISPLAYCONFIG_DEVICE_INFO_HEADER {
                 r#type: DISPLAYCONFIG_DEVICE_INFO_TYPE(-3i32),
-                size: mem::size_of::<DpiScaleGet>() as u32,
+                size: size_of::<DpiScaleGet>() as u32,
                 adapterId: path.sourceInfo.adapterId,
                 id: path.sourceInfo.id,
             },
@@ -239,7 +245,7 @@ impl DisplayTuner {
             old_height, new_width, new_height, "Changing resolution"
         );
 
-        let (paths, mut modes) = self.get_display_config()?;
+        let (paths, mut modes) = Self::get_display_config()?;
 
         unsafe {
             let path = paths
@@ -274,18 +280,18 @@ impl DisplayTuner {
         let new_scaling = config.scaling;
         info!(old_scaling, new_scaling, "Changing DPI scaling");
 
-        let (paths, mut _modes) = self.get_display_config()?;
+        let (paths, _modes) = Self::get_display_config()?;
         let path = paths
             .iter()
             .find(|path| path.sourceInfo.id == display.source_id)
             .unwrap();
 
         let current_scale = Self::get_display_scaling_from_path(path)?;
-        let recommoned_scale = current_scale.1;
+        let recommended_scale = current_scale.1;
 
-        let recommoned_scale_idx = DPI_VALUES
+        let recommended_scale_idx = DPI_VALUES
             .iter()
-            .position(|&v| v == recommoned_scale)
+            .position(|&v| v == recommended_scale)
             .unwrap() as i32;
 
         let target_scale_idx = DPI_VALUES
@@ -297,11 +303,11 @@ impl DisplayTuner {
             let mut dpi_set = DpiScaleSet {
                 header: DISPLAYCONFIG_DEVICE_INFO_HEADER {
                     r#type: DISPLAYCONFIG_DEVICE_INFO_TYPE(-4i32),
-                    size: mem::size_of::<DpiScaleSet>() as u32,
+                    size: size_of::<DpiScaleSet>() as u32,
                     adapterId: path.sourceInfo.adapterId,
                     id: display.source_id,
                 },
-                scale_rel: target_scale_idx - recommoned_scale_idx,
+                scale_rel: target_scale_idx - recommended_scale_idx,
             };
 
             let result = DisplayConfigSetDeviceInfo(&raw mut dpi_set.header);
