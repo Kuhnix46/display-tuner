@@ -1,8 +1,7 @@
 use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
-use display_tuner::display;
-use display_tuner::display::DisplayConfig;
-use tracing::{info, warn};
+use display_tuner::display::{apply_display_config, enumerate_displays, DisplayConfig};
+use tracing::{info};
 
 #[derive(Parser, Debug)]
 #[command(name = "display-tuner", about = "Tune Windows display resolution and scaling", version)]
@@ -45,23 +44,22 @@ fn main() -> Result<()> {
     tracing::subscriber::set_global_default(subscriber)?;
 
     let cli = Cli::parse();
-
-    let mut tuner = display::DisplayTuner::default();
+    
     match cli.command {
         Commands::List => {
-            let displays = tuner.enumerate_displays()?;
+            let displays = enumerate_displays()?;
             for d in &displays {
                 info!("{d}");
             }
         }
         Commands::Set(args) => {
-            let mut displays = tuner.enumerate_displays()?;
+            let mut displays = enumerate_displays()?;
 
             if !args.all {
                 if let Some(id) = args.id {
                     displays.retain(|d| d.source_id == id);
                 } else {
-                    warn!("No --id provided and --all not set; applying to all displays");
+                   return Err(anyhow!("No display source id specified"));
                 }
             }
 
@@ -76,7 +74,7 @@ fn main() -> Result<()> {
                         height: args.height.unwrap_or(disp.height),
                         scaling: args.scaling.unwrap_or(disp.scaling_current),
                     };
-                tuner.apply_display_config(disp, &target)?;
+                apply_display_config(disp, &target)?;
             }
         }
     }
