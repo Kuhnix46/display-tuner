@@ -1,0 +1,27 @@
+[package]
+name = "display-tuner"
+version = "0.1.0"
+edition = "2024"
+authors = ["Koen Cardoen"]
+categories = ["games"]
+description = "TBD"
+keywords = ["TBD"]
+license = "GPL-3"
+readme = "README.md"
+repository = "https://github.com/Kuhnix46/display-tuner"
+
+[dependencies]
+windows = { version = "0.62", features = ["Win32_Devices_Display"] }
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+correctness = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
