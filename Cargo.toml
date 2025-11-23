@@ -6,7 +6,7 @@ authors = ["Kuhnix46"]
 categories = ["command-line-utilities"]
 description = "A command line utility to get and set display settings (resolution & scaling) on Windows."
 keywords = ["display", "monitor", "settings", "windows", "cli"]
-license = "GPL-3"
+license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/Kuhnix46/display-tuner"
 
