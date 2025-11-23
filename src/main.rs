@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
 use display_tuner::display::{apply_display_config, enumerate_displays, DisplayConfig};
-use tracing::{info};
 
 #[derive(Parser, Debug)]
 #[command(name = "display-tuner", about = "Tune Windows display resolution and scaling", version)]
@@ -38,10 +37,9 @@ struct SetArgs {
 }
 
 fn main() -> Result<()> {
-    let subscriber = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
-        .finish();
-    tracing::subscriber::set_global_default(subscriber)?;
+    //let subscriber = tracing_subscriber::fmt()
+    //    .finish();
+    //tracing::subscriber::set_global_default(subscriber)?;
 
     let cli = Cli::parse();
     
@@ -49,7 +47,7 @@ fn main() -> Result<()> {
         Commands::List => {
             let displays = enumerate_displays()?;
             for d in &displays {
-                info!("{d}");
+                println!("{d}");
             }
         }
         Commands::Set(args) => {
@@ -74,6 +72,7 @@ fn main() -> Result<()> {
                         height: args.height.unwrap_or(disp.height),
                         scaling: args.scaling.unwrap_or(disp.scaling_current),
                     };
+                println!("Applying to display {}: {target:?}", disp.source_id);
                 apply_display_config(disp, &target)?;
             }
         }
